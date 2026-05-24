@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐟 JobFish — 求职追踪仪表盘</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐟</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --cream: #f7f4ef; --paper: #fdfcf9; --stone: #e8e3db; --stone-light: #f2eee8;
+  --ink: #2c2930; --ink-soft: #524d57; --ink-muted: #8b8690; --ink-ghost: #bfbac4;
+  --clay: #bf9f84; --clay-deep: #a88668; --clay-glow: rgba(191,159,132,0.18);
+  --sage: #8fa88e; --sage-glow: rgba(143,168,142,0.14);
+  --dusty-blue: #8197a8; --dusty-glow: rgba(129,151,168,0.14);
+  --mauve: #ae9eb3; --mauve-glow: rgba(174,158,179,0.14);
+  --wheat: #cbb088; --wheat-glow: rgba(203,176,136,0.14);
+  --rose: #be9898; --rose-glow: rgba(190,152,152,0.14);
+  --r: 14px; --r-sm: 9px; --r-xs: 6px;
+  --shadow-sm: 0 1px 0 var(--stone),0 2px 6px rgba(44,41,48,0.03);
+  --shadow: 0 1px 0 var(--stone),0 3px 12px rgba(44,41,48,0.05);
+  --shadow-lg: 0 1px 0 var(--stone),0 8px 28px rgba(44,41,48,0.07);
+  --font: -apple-system,BlinkMacSystemFont,"Microsoft YaHei","PingFang SC",ui-sans-serif,sans-serif;
+  --ease: cubic-bezier(0.4,0,0.2,1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:var(--font);background:var(--cream);
+  background-image:radial-gradient(ellipse at 30% 5%,rgba(191,159,132,0.07) 0%,transparent 60%),radial-gradient(ellipse at 70% 95%,rgba(143,168,142,0.05) 0%,transparent 60%),radial-gradient(ellipse at 50% 50%,rgba(174,158,179,0.03) 0%,transparent 80%);
+  color:var(--ink);line-height:1.6;min-height:100vh;-webkit-font-smoothing:antialiased;
+}
+.app{max-width:1060px;margin:0 auto;padding:20px 18px 64px}
+
+.header{display:flex;align-items:center;gap:18px;padding:30px 0 14px}
+.header-fish{font-size:48px;line-height:1;animation:float 3.5s ease-in-out infinite;filter:drop-shadow(0 4px 10px rgba(191,159,132,0.3));cursor:default}
+@keyframes float{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-8px) rotate(3deg)}}
+.header-txt h1{font-size:32px;font-weight:750;letter-spacing:-0.7px;color:var(--ink);line-height:1.1}
+.header-txt h1 em{font-style:normal;color:var(--clay)}
+.header-txt p{font-size:13px;color:var(--ink-muted);margin-top:3px;letter-spacing:.3px}
+
+.alert{display:flex;align-items:center;gap:10px;padding:13px 20px;margin-bottom:18px;border-radius:var(--r);font-size:13.5px;color:#8a6828;background:linear-gradient(135deg,#fdf8ee 0%,#fdf5e8 100%);border:1px solid #e8d896;animation:slideIn .4s var(--ease)}
+@keyframes slideIn{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
+.alert-close{margin-left:auto;background:none;border:none;font-size:18px;cursor:pointer;color:inherit;opacity:.4;transition:.2s var(--ease)}
+.alert-close:hover{opacity:1;transform:scale(1.15)}
+
+.tabs{display:flex;gap:0;background:var(--paper);border-radius:var(--r);margin-bottom:22px;box-shadow:var(--shadow);overflow:hidden;position:sticky;top:12px;z-index:10}
+.tab-btn{flex:1;padding:14px 20px;border:none;background:transparent;font-size:14px;font-family:var(--font);color:var(--ink-muted);cursor:pointer;transition:all .25s var(--ease);font-weight:520;letter-spacing:.3px;position:relative}
+.tab-btn.active{color:var(--ink);font-weight:680;background:linear-gradient(180deg,rgba(191,159,132,0.08) 0%,transparent 100%)}
+.tab-btn.active::after{content:'';position:absolute;bottom:0;left:25%;right:25%;height:3px;background:linear-gradient(90deg,transparent,var(--clay),transparent);border-radius:2px}
+.tab-btn:hover:not(.active){color:var(--ink);background:rgba(0,0,0,0.012)}
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:11px;background:var(--clay-glow);color:var(--clay-deep);font-size:11px;font-weight:680;margin-left:6px;padding:0 7px}
+.tab-panel{display:none}
+.tab-panel.active{display:block;animation:fadeUp .38s var(--ease)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+.card{background:var(--paper);border-radius:var(--r);padding:22px 28px;margin-bottom:16px;box-shadow:var(--shadow);border:1px solid var(--stone-light);transition:box-shadow .3s var(--ease),transform .25s var(--ease)}
+.card:hover{box-shadow:var(--shadow-lg)}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+.card-header h2{font-size:16px;font-weight:680;display:flex;align-items:center;gap:8px}
+.card-header h2 .ico{font-size:18px}
+.card h3{font-size:14px;font-weight:640;margin-bottom:14px;color:var(--ink);letter-spacing:.3px}
+
+.form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg.w2{grid-column:span 2}
+.fg.w3{grid-column:span 3}
+.fg label{font-size:11px;font-weight:640;color:var(--ink-soft);letter-spacing:.5px;text-transform:uppercase}
+.fg label .req{color:var(--rose)}
+.fg label .hint{font-weight:400;text-transform:none;font-size:10px;color:var(--ink-ghost);margin-left:4px}
+.fg input,.fg select,.fg textarea{padding:10px 14px;border:1.5px solid var(--stone);border-radius:var(--r-xs);font-size:14px;font-family:var(--font);background:var(--paper);color:var(--ink);transition:all .2s var(--ease);width:100%}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-glow)}
+.fg textarea{resize:vertical;min-height:66px}
+.fg select{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 7.5L1.5 3h9z' fill='%238b8690'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px}
+.other-input{display:none;margin-top:4px}
+.other-input.show{display:block}
+
+.prio-row{display:flex;gap:6px}
+.prio-row input{display:none}
+.prio-row label{flex:1;text-align:center;padding:10px 4px;border-radius:var(--r-xs);font-size:12.5px;font-weight:560;cursor:pointer;border:1.5px solid var(--stone);transition:all .2s var(--ease)}
+.prio-row input:checked+.p-hi{border-color:var(--rose);background:linear-gradient(135deg,#fdf6f6,#fdf0f0);color:#b08080}
+.prio-row input:checked+.p-md{border-color:var(--wheat);background:linear-gradient(135deg,#fdfaf4,#fdf6ec);color:#a08050}
+.prio-row input:checked+.p-lo{border-color:var(--sage);background:linear-gradient(135deg,#f4f7f4,#eff5ef);color:#7a9070}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 22px;border:none;border-radius:var(--r-xs);font-size:13.5px;font-family:var(--font);cursor:pointer;transition:all .2s var(--ease);font-weight:560;letter-spacing:.3px;position:relative;overflow:hidden}
+.btn::after{content:'';position:absolute;inset:0;background:rgba(255,255,255,0);transition:background .3s}
+.btn:active::after{background:rgba(0,0,0,0.06)}
+.btn-primary{background:var(--clay);color:#fff;box-shadow:0 2px 10px var(--clay-glow)}
+.btn-primary:hover{background:var(--clay-deep);transform:translateY(-2px);box-shadow:0 6px 20px rgba(191,159,132,0.35)}
+.btn-primary:active{transform:translateY(0)}
+.btn-ghost{background:transparent;color:var(--ink-muted)}
+.btn-ghost:hover{background:var(--cream);color:var(--ink)}
+.btn-sm{padding:6px 14px;font-size:12px}
+.btn-xs{padding:3px 10px;font-size:11px;border-radius:5px}
+.btn-outline{background:transparent;border:1.5px solid var(--stone);color:var(--ink-muted)}
+.btn-outline:hover{border-color:var(--clay);color:var(--clay)}
+.btn-danger{background:transparent;color:var(--rose)}
+.btn-danger:hover{background:linear-gradient(135deg,#fdf6f6,#fdf0f0)}
+.btn-row{display:flex;gap:10px;align-items:center}
+
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filter-bar input,.filter-bar select{padding:8px 11px;border:1.5px solid var(--stone);border-radius:var(--r-xs);font-size:12.5px;font-family:var(--font);background:var(--paper);color:var(--ink);transition:all .2s var(--ease)}
+.filter-bar input{width:160px}
+.filter-bar input:focus,.filter-bar select:focus{outline:none;border-color:var(--clay)}
+.filter-spacer{flex:1}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:14px;font-size:11.5px;font-weight:580;background:var(--clay-glow);color:var(--clay-deep);animation:popIn .25s var(--ease)}
+@keyframes popIn{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
+.chip button{background:none;border:none;cursor:pointer;font-size:14px;color:inherit;opacity:.5;line-height:1;padding:0 0 0 2px}
+.chip button:hover{opacity:1}
+
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;padding:11px 8px;color:var(--ink-ghost);font-weight:640;border-bottom:2px solid var(--stone-light);white-space:nowrap;font-size:10.5px;letter-spacing:.6px;text-transform:uppercase}
+td{padding:11px 8px;border-bottom:1px solid var(--stone-light);vertical-align:middle}
+tr{transition:background .15s}
+tr:hover td{background:rgba(191,159,132,0.04)}
+
+.tag{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;letter-spacing:.2px}
+.tag-def{background:#f2f0ec;color:#8b8578}
+.tag-prog{background:linear-gradient(135deg,#eef3f7,#e8f0f5);color:#6a7d8e}
+.tag-good{background:linear-gradient(135deg,#eff5ef,#e8f2e8);color:#6a8a68}
+.tag-bad{background:linear-gradient(135deg,#fdf6f6,#fdf0f0);color:#a87070}
+.tag-phi{background:linear-gradient(135deg,#fdf6f6,#fdf0f0);color:#b07070}
+.tag-pmd{background:linear-gradient(135deg,#fdfaf4,#fdf6ec);color:#a08050}
+.tag-plo{background:linear-gradient(135deg,#f4f7f4,#eff5ef);color:#7a9070}
+.tag-wait{background:linear-gradient(135deg,#fdfaf4,#fef9f0);color:#b08840}
+
+.dl{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:640;padding:2px 8px;border-radius:10px}
+.dl-urg{background:#fef0f0;color:#c04040;animation:pulse 1.8s ease-in-out infinite}
+.dl-soon{background:#fdf8ee;color:#8a6828}
+.dl-ok{background:#f4f5f2;color:var(--ink-muted)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+.empty{text-align:center;padding:44px 20px;color:var(--ink-ghost)}
+.empty-ico{font-size:46px;margin-bottom:8px;opacity:.4}
+.empty p{font-size:14px;color:var(--ink-muted)}
+.empty .sub{font-size:12px;margin-top:2px}
+
+.stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+.stat-card{background:var(--paper);border-radius:var(--r);padding:18px 14px;text-align:center;box-shadow:var(--shadow-sm);border:1px solid var(--stone-light);transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
+.stat-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.stat-ico{font-size:20px;margin-bottom:3px;opacity:.65}
+.stat-num{font-size:27px;font-weight:760;color:var(--ink);letter-spacing:-.6px}
+.stat-lbl{font-size:10.5px;color:var(--ink-muted);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+.stat-sub{font-size:10px;color:var(--ink-ghost);margin-top:1px}
+
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.dash-card{min-height:320px}
+.dash-card.wide{grid-column:1/-1}
+.chart-wrap{position:relative;width:100%;height:260px}
+.chart-wrap canvas{width:100%!important;height:100%!important}
+.chart-wrap.tall{height:300px}
+.chart-hint{font-size:10.5px;color:var(--ink-ghost);text-align:center;margin-top:2px}
+
+.import-zone{border:2px dashed var(--stone);border-radius:var(--r);padding:32px;text-align:center;cursor:pointer;transition:all .25s var(--ease);margin-bottom:16px;background:linear-gradient(135deg,rgba(191,159,132,0.02) 0%,rgba(143,168,142,0.02) 100%)}
+.import-zone:hover,.import-zone.dragover{border-color:var(--clay);background:rgba(191,159,132,0.06);transform:translateY(-1px)}
+.import-ico{font-size:40px;margin-bottom:8px;transition:transform .3s}
+.import-zone:hover .import-ico{transform:translateY(-4px)}
+.import-zone h4{font-size:15px;margin-bottom:4px}
+.import-zone p{font-size:12px;color:var(--ink-muted)}
+.import-preview{max-height:240px;overflow-y:auto;margin-top:14px;font-size:12px}
+.import-preview table{font-size:11px}
+.import-preview th{font-size:10px}
+
+.backup-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.backup-zone{text-align:center;padding:28px 18px;cursor:pointer;transition:all .25s var(--ease);border-radius:var(--r);border:2px dashed var(--stone);background:linear-gradient(135deg,rgba(191,159,132,0.015) 0%,rgba(143,168,142,0.015) 100%)}
+.backup-zone:hover{border-color:var(--clay);background:rgba(191,159,132,0.04);transform:translateY(-1px)}
+.backup-ico{font-size:38px;margin-bottom:8px}
+.backup-zone h4{font-size:14px;margin-bottom:3px}
+.backup-zone p{font-size:12px;color:var(--ink-muted)}
+
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 24px;border-radius:10px;font-size:13.5px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.16);letter-spacing:.3px}
+.toast.show{opacity:1}
+
+.footer{text-align:center;padding:40px 0 14px;color:var(--ink-ghost);font-size:12px;letter-spacing:.3px}
+.footer b{color:var(--clay);font-weight:640}
+
+@media(max-width:768px){
+  .form-grid{grid-template-columns:1fr 1fr}
+  .fg.w2,.fg.w3{grid-column:span 2}
+  .stats-row{grid-template-columns:repeat(3,1fr)}
+  .dash-grid{grid-template-columns:1fr}
+  .dash-card.wide{grid-column:1}
+  .backup-grid{grid-template-columns:1fr}
+  .filter-bar input{width:120px}
+}
+@media(max-width:480px){
+  .form-grid{grid-template-columns:1fr}
+  .fg.w2,.fg.w3{grid-column:1}
+  .stats-row{grid-template-columns:1fr 1fr}
+  .card{padding:16px 12px}
+  .header{flex-direction:column;text-align:center}
+  .header-txt h1{font-size:24px}
+  .tabs{position:static}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="header">
+  <span class="header-fish">🐟</span>
+  <div class="header-txt"><h1>Job<em>Fish</em></h1><p>捞Offer 不空军</p></div>
+</div>
+
+<div class="alert" id="alert-bar" style="display:none">
+  <span>⏰</span><span id="alert-msg"></span>
+  <button class="alert-close" id="alert-close">&times;</button>
+</div>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="records">投递记录<span class="tab-badge" id="badge-all">0</span></button>
+  <button class="tab-btn" data-tab="dashboard">数据看板</button>
+  <button class="tab-btn" data-tab="import">导入数据</button>
+  <button class="tab-btn" data-tab="backup">备份管理</button>
+</nav>
+
+<!-- ═══════ TAB: 投递记录 ═══════ -->
+<div class="tab-panel active" id="panel-records">
+
+  <div class="card">
+    <div class="card-header">
+      <h2><span class="ico">📝</span> <span id="form-title">新增投递</span></h2>
+      <button class="btn btn-ghost btn-sm" id="btn-cancel" style="display:none">取消编辑</button>
+    </div>
+    <div class="form-grid">
+      <input type="hidden" id="edit-id">
+
+      <div class="fg"><label>公司名称<span class="req">*</span></label><input type="text" id="f-company" placeholder="例：字节跳动" required></div>
+      <div class="fg"><label>岗位名称<span class="req">*</span></label><input type="text" id="f-position" placeholder="例：数据运营" required></div>
+      <div class="fg"><label>工作城市<span class="req">*</span></label><input type="text" id="f-city" placeholder="例：北京" list="dl-cities">
+        <datalist id="dl-cities"><option value="北京"><option value="上海"><option value="广州"><option value="深圳"><option value="杭州"><option value="成都"><option value="武汉"><option value="南京"><option value="西安"><option value="苏州"><option value="重庆"><option value="厦门"><option value="长沙"><option value="天津"><option value="合肥"><option value="郑州"></datalist>
+      </div>
+
+      <div class="fg"><label>薪资范围 (k)</label><input type="text" id="f-salary" placeholder="例：8-12"></div>
+      <div class="fg">
+        <label>行业<span class="req">*</span></label>
+        <select id="f-industry" required onchange="toggleOther(this,'f-industry-other')">
+          <option value="">请选择</option>
+          <option value="互联网/软件开发">互联网/软件开发</option><option value="电商/新零售">电商/新零售</option>
+          <option value="金融/银行/保险">金融/银行/保险</option><option value="教育/培训">教育/培训</option>
+          <option value="医疗/健康/制药">医疗/健康/制药</option><option value="制造业/机械">制造业/机械</option>
+          <option value="房地产/建筑">房地产/建筑</option><option value="咨询/服务">咨询/服务</option>
+          <option value="游戏/娱乐">游戏/娱乐</option><option value="AI/人工智能">AI/人工智能</option>
+          <option value="广告/传媒/文化">广告/传媒/文化</option><option value="通信/运营商">通信/运营商</option>
+          <option value="交通/物流/运输">交通/物流/运输</option><option value="能源/环保">能源/环保</option>
+          <option value="法律/法务">法律/法务</option><option value="政府/非营利">政府/非营利</option>
+          <option value="餐饮/酒店/旅游">餐饮/酒店/旅游</option><option value="汽车/出行">汽车/出行</option>
+          <option value="芯片/半导体">芯片/半导体</option><option value="其他">其他（手动输入）</option>
+        </select>
+        <input type="text" id="f-industry-other" class="other-input" placeholder="请输入行业名称">
+      </div>
+      <div class="fg">
+        <label>投递渠道<span class="req">*</span></label>
+        <select id="f-channel" required onchange="toggleOther(this,'f-channel-other')">
+          <option value="">请选择</option>
+          <option value="BOSS直聘">BOSS直聘</option><option value="智联招聘">智联招聘</option>
+          <option value="拉勾">拉勾</option><option value="猎聘">猎聘</option><option value="前程无忧">前程无忧</option>
+          <option value="官网">官网</option><option value="内推">内推</option><option value="其他">其他（手动输入）</option>
+        </select>
+        <input type="text" id="f-channel-other" class="other-input" placeholder="请输入渠道名称">
+      </div>
+
+      <div class="fg"><label>投递日期<span class="req">*</span></label><input type="date" id="f-date" required></div>
+      <div class="fg"><label>提醒日期<span class="hint">跟进用，非状态</span></label><input type="date" id="f-deadline"></div>
+      <div class="fg">
+        <label>当前状态</label>
+        <select id="f-status">
+          <option value="已投递">已投递</option><option value="初筛通过">初筛通过</option>
+          <option value="笔试">笔试</option><option value="待面试">待面试</option>
+          <option value="面试中">面试中</option><option value="已发Offer">已发Offer</option>
+          <option value="已拒">已拒</option><option value="被拒">被拒</option>
+        </select>
+      </div>
+
+      <div class="fg">
+        <label>优先级</label>
+        <div class="prio-row">
+          <input type="radio" name="prio" value="高" id="prio-hi"><label class="p-hi" for="prio-hi">🔥 高</label>
+          <input type="radio" name="prio" value="中" id="prio-md" checked><label class="p-md" for="prio-md">⭐ 中</label>
+          <input type="radio" name="prio" value="低" id="prio-lo"><label class="p-lo" for="prio-lo">💤 低</label>
+        </div>
+      </div>
+
+      <div class="fg w3"><label>备注</label><textarea id="f-note" rows="2" placeholder="JD要点、面试问题、跟进记录..."></textarea></div>
+      <div class="fg w3"><div class="btn-row"><button type="button" class="btn btn-primary" id="btn-save">💾 保存投递</button><span style="font-size:11px;color:var(--ink-ghost)">Ctrl+S 快捷保存</span></div></div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:14px 22px">
+    <div class="filter-bar">
+      <input type="text" id="filter-search" placeholder="🔍 搜索公司/岗位...">
+      <select id="filter-status"><option value="">全部状态</option><option value="已投递">已投递</option><option value="初筛通过">初筛通过</option><option value="笔试">笔试</option><option value="待面试">待面试</option><option value="面试中">面试中</option><option value="已发Offer">已发Offer</option><option value="已拒">已拒</option><option value="被拒">被拒</option></select>
+      <select id="filter-industry"><option value="">全部行业</option></select>
+      <select id="filter-channel"><option value="">全部渠道</option></select>
+      <select id="filter-priority"><option value="">全部优先级</option><option value="高">🔥 高</option><option value="中">⭐ 中</option><option value="低">💤 低</option></select>
+      <select id="filter-city"><option value="">全部城市</option></select>
+      <span class="filter-spacer"></span>
+      <span id="active-chips"></span>
+      <span style="font-size:12px;color:var(--ink-muted)" id="record-count">共 0 条</span>
+      <button class="btn btn-outline btn-sm" id="btn-export-csv">📥 CSV</button>
+    </div>
+  </div>
+
+  <div class="card" style="padding:12px 18px">
+    <div class="table-wrap"><table>
+      <thead><tr><th>优</th><th>公司</th><th>岗位</th><th>城市</th><th>行业</th><th>薪资</th><th>渠道</th><th>投递</th><th>提醒</th><th>状态</th><th>备注</th><th></th></tr></thead>
+      <tbody id="records-tbody"><tr><td colspan="12"><div class="empty"><div class="empty-ico">🎣</div><p>鱼塘还是空的</p><p class="sub">在上方填写第一条投递，开始捞Offer</p></div></td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ═══════ TAB: 数据看板 ═══════ -->
+<div class="tab-panel" id="panel-dashboard">
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-ico">📮</div><div class="stat-num" id="s-total">0</div><div class="stat-lbl">总投递</div></div>
+    <div class="stat-card"><div class="stat-ico">🎯</div><div class="stat-num" id="s-active">0</div><div class="stat-lbl">进行中</div><div class="stat-sub" id="s-rate"></div></div>
+    <div class="stat-card"><div class="stat-ico">🏆</div><div class="stat-num" id="s-offer">0</div><div class="stat-lbl">Offer</div></div>
+    <div class="stat-card"><div class="stat-ico">🌍</div><div class="stat-num" id="s-cities">0</div><div class="stat-lbl">城市</div></div>
+    <div class="stat-card"><div class="stat-ico">⏰</div><div class="stat-num" id="s-urgent">0</div><div class="stat-lbl">即将提醒</div><div class="stat-sub">3天内</div></div>
+  </div>
+
+  <div class="dash-grid">
+    <div class="card dash-card"><h3>📊 投递漏斗</h3><div class="chart-wrap"><canvas id="ch-funnel"></canvas></div></div>
+    <div class="card dash-card"><h3>🌐 渠道分布<span class="chart-hint">点击可筛选</span></h3><div class="chart-wrap"><canvas id="ch-channel"></canvas></div></div>
+    <div class="card dash-card wide"><h3>📈 每周投递趋势</h3><div class="chart-wrap tall"><canvas id="ch-timeline"></canvas></div></div>
+    <div class="card dash-card"><h3>🏙️ 城市分布<span class="chart-hint">点击可筛选</span></h3><div class="chart-wrap"><canvas id="ch-city"></canvas></div></div>
+    <div class="card dash-card"><h3>🏭 行业分布<span class="chart-hint">点击可筛选</span></h3><div class="chart-wrap"><canvas id="ch-industry"></canvas></div></div>
+    <div class="card dash-card"><h3>🔥 优先级</h3><div class="chart-wrap"><canvas id="ch-priority"></canvas></div></div>
+    <div class="card dash-card"><h3>📋 状态概览</h3><div class="chart-wrap"><canvas id="ch-status"></canvas></div></div>
+    <div class="card dash-card"><h3>🎯 渠道转化</h3><div class="chart-wrap"><canvas id="ch-convert"></canvas></div></div>
+    <div class="card dash-card wide"><h3>💰 薪资分布</h3><div class="chart-wrap"><canvas id="ch-salary"></canvas></div></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>🏢 公司投递排行</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>公司</th><th>投递</th><th>面试中</th><th>Offer</th><th>已拒</th><th>被拒</th><th>高优先</th></tr></thead>
+      <tbody id="co-summary"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ═══════ TAB: 导入数据 ═══════ -->
+<div class="tab-panel" id="panel-import">
+  <div class="card import-zone" id="import-zone">
+    <div class="import-ico">📂</div>
+    <h4>导入 Excel / CSV 投递记录</h4>
+    <p>拖拽 .xlsx / .csv 文件到此处，或点击选择文件</p>
+    <input type="file" id="import-file-input" accept=".xlsx,.csv,.xls" style="display:none">
+    <button class="btn btn-primary" style="margin-top:14px" id="import-select-btn">选择文件</button>
+  </div>
+
+  <div class="card" id="import-preview-card" style="display:none">
+    <div class="card-header">
+      <h2><span class="ico">👁️</span> 导入预览</h2>
+      <span style="font-size:14px;color:var(--ink-muted)">识别到 <strong id="import-row-count">0</strong> 条记录</span>
+    </div>
+    <div class="import-preview"><div class="table-wrap"><table><thead id="import-preview-head"></thead><tbody id="import-preview-body"></tbody></table></div></div>
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn btn-primary" id="import-merge-btn">📥 合并到现有数据</button>
+      <button class="btn btn-outline" id="import-replace-btn">🔄 覆盖现有数据</button>
+      <button class="btn btn-ghost btn-sm" id="import-cancel-btn">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ TAB: 备份管理 ═══════ -->
+<div class="tab-panel" id="panel-backup">
+  <div class="backup-grid">
+    <div class="card backup-zone" id="bk-export">
+      <div class="backup-ico">📤</div><h4>导出数据备份</h4><p>下载 JSON 文件保存</p>
+      <button class="btn btn-primary" style="margin-top:10px">下载备份</button>
+    </div>
+    <div class="card backup-zone" id="bk-import-zone">
+      <div class="backup-ico">📥</div><h4>恢复数据备份</h4><p>从 JSON 文件恢复</p>
+      <button class="btn btn-outline" style="margin-top:10px" id="bk-import-btn">选择文件</button>
+      <input type="file" id="bk-file-input" accept=".json" style="display:none">
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px;text-align:center">
+    <h3>🗂️ 数据概览</h3>
+    <div class="stats-row" style="margin-top:10px">
+      <div class="stat-card"><div class="stat-num" id="bk-count">0</div><div class="stat-lbl">总记录</div></div>
+      <div class="stat-card"><div class="stat-num" id="bk-size">0 KB</div><div class="stat-lbl">存储占用</div></div>
+      <div class="stat-card"><div class="stat-num" id="bk-oldest">-</div><div class="stat-lbl">最早投递</div></div>
+      <div class="stat-card"><div class="stat-num" id="bk-newest">-</div><div class="stat-lbl">最新投递</div></div>
+    </div>
+    <button class="btn btn-danger btn-sm" style="margin-top:14px" id="btn-clear">⚠️ 清除全部数据</button>
+  </div>
+</div>
+
+<div class="footer"><b>🐟 JobFish</b> · 数据仅保存在你的浏览器 · 无需登录 · 永久免费</div>
+<div class="toast" id="toast"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════
+var KEY='jobfish-v3';
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||[]}catch(e){return[]}}
+function save(d){localStorage.setItem(KEY,JSON.stringify(d))}
+var records=load();
+var editingId=null,currentTab='records',charts={},alertOff=false,chartFilter=null,importData=null;
+
+function gid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function T(m){var e=document.getElementById('toast');e.textContent=m;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(function(){e.classList.remove('show')},2200)}
+function todayStr(){return new Date().toISOString().split('T')[0]}
+function fmtDM(d){if(!d)return'';var p=d.split('-');return p[1]+'/'+p[2]}
+
+// ═══════════════════════════════════════
+//  OTHER INPUT TOGGLE
+// ═══════════════════════════════════════
+function toggleOther(sel, otherId){
+  var inp=document.getElementById(otherId);
+  if(sel.value==='其他'){
+    inp.classList.add('show');inp.focus();
+  }else{
+    inp.classList.remove('show');inp.value='';
+  }
+}
+
+function getFieldValue(fieldId, otherId){
+  var sel=document.getElementById(fieldId);
+  if(sel.value==='其他'){
+    return document.getElementById(otherId).value.trim()||'其他';
+  }
+  return sel.value;
+}
+
+function setFieldValue(fieldId, otherId, val){
+  var sel=document.getElementById(fieldId);
+  var opts=Array.from(sel.options).map(function(o){return o.value});
+  if(opts.indexOf(val)>=0){
+    sel.value=val;
+    document.getElementById(otherId).classList.remove('show');
+    document.getElementById(otherId).value='';
+  }else{
+    sel.value='其他';
+    document.getElementById(otherId).classList.add('show');
+    document.getElementById(otherId).value=val;
+  }
+}
+
+// ═══════════════════════════════════════
+//  DEADLINE CHECK
+// ═══════════════════════════════════════
+function checkDeadlines(){
+  if(alertOff)return;
+  var now=new Date();now.setHours(0,0,0,0);
+  var urg=[],soon=[];
+  records.forEach(function(r){
+    if(!r.deadline)return;
+    var d=new Date(r.deadline+'T00:00:00'),diff=Math.ceil((d-now)/86400000);
+    if(diff<0)urg.push(r.company+' '+r.position);
+    else if(diff<=3)soon.push(r.company+' '+r.position+' ('+diff+'天后)');
+  });
+  var bar=document.getElementById('alert-bar'),msg=document.getElementById('alert-msg');
+  if(urg.length){bar.style.display='flex';msg.textContent='已过提醒日期：'+urg.join('、')+' — 请更新状态或移除提醒';}
+  else if(soon.length){bar.style.display='flex';msg.textContent='提醒日期临近：'+soon.join('、');}
+  else bar.style.display='none';
+}
+
+// ═══════════════════════════════════════
+//  FORM
+// ═══════════════════════════════════════
+function resetForm(){
+  editingId=null;
+  document.getElementById('edit-id').value='';
+  document.getElementById('f-company').value='';document.getElementById('f-position').value='';
+  document.getElementById('f-city').value='';document.getElementById('f-salary').value='';
+  document.getElementById('f-industry').value='';document.getElementById('f-industry-other').value='';document.getElementById('f-industry-other').classList.remove('show');
+  document.getElementById('f-channel').value='';document.getElementById('f-channel-other').value='';document.getElementById('f-channel-other').classList.remove('show');
+  document.getElementById('f-date').value=todayStr();document.getElementById('f-deadline').value='';
+  document.getElementById('f-status').value='已投递';document.getElementById('f-note').value='';
+  document.getElementById('prio-md').checked=true;
+  document.getElementById('form-title').textContent='新增投递';
+  document.getElementById('btn-save').innerHTML='💾 保存投递';
+  document.getElementById('btn-cancel').style.display='none';
+}
+function getPri(){return document.getElementById('prio-hi').checked?'高':document.getElementById('prio-lo').checked?'低':'中'}
+
+function editRecord(id){
+  var r=records.find(function(x){return x.id===id});if(!r)return;
+  editingId=id;
+  document.getElementById('edit-id').value=r.id;
+  document.getElementById('f-company').value=r.company;document.getElementById('f-position').value=r.position;
+  document.getElementById('f-city').value=r.city||'';document.getElementById('f-salary').value=r.salary||'';
+  setFieldValue('f-industry','f-industry-other',r.industry||'');
+  setFieldValue('f-channel','f-channel-other',r.channel||'');
+  document.getElementById('f-date').value=r.date;document.getElementById('f-deadline').value=r.deadline||'';
+  document.getElementById('f-status').value=r.status;document.getElementById('f-note').value=r.note||'';
+  var pm={高:'hi',中:'md',低:'lo'};document.getElementById('prio-'+(pm[r.priority||'中'])).checked=true;
+  document.getElementById('form-title').textContent='编辑投递';
+  document.getElementById('btn-save').innerHTML='✏️ 更新投递';
+  document.getElementById('btn-cancel').style.display='';
+  document.getElementById('f-company').focus();window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function saveRecord(){
+  var co=document.getElementById('f-company').value.trim();
+  var po=document.getElementById('f-position').value.trim();
+  var ci=document.getElementById('f-city').value.trim();
+  var ind=getFieldValue('f-industry','f-industry-other');
+  var ch=getFieldValue('f-channel','f-channel-other');
+  var da=document.getElementById('f-date').value;
+  if(!co||!po||!ci||!ind||!ch||!da){T('请填写公司、岗位、城市、行业、渠道和日期');return;}
+  var rec={
+    id:editingId||gid(),company:co,position:po,city:ci,industry:ind,
+    salary:document.getElementById('f-salary').value.trim(),
+    channel:ch,date:da,deadline:document.getElementById('f-deadline').value,
+    status:document.getElementById('f-status').value,priority:getPri(),
+    note:document.getElementById('f-note').value.trim(),
+    createdAt:editingId?(records.find(function(x){return x.id===editingId})||{}).createdAt||new Date().toISOString():new Date().toISOString()
+  };
+  if(editingId){records=records.map(function(x){return x.id===editingId?rec:x})}
+  else{records.push(rec)}
+  save(records);resetForm();alertOff=false;checkDeadlines();chartFilter=null;renderAll();
+  T(editingId?'✅ 已更新':'✅ 已保存');
+}
+
+function deleteRecord(id){
+  if(!confirm('确定删除？'))return;
+  records=records.filter(function(x){return x.id!==id});
+  if(editingId===id)resetForm();
+  save(records);checkDeadlines();chartFilter=null;renderAll();T('已删除');
+}
+
+// ═══════════════════════════════════════
+//  FILTERS & TABLE
+// ═══════════════════════════════════════
+function getFiltered(){
+  var s=(document.getElementById('filter-search').value||'').toLowerCase();
+  var st=document.getElementById('filter-status').value;
+  var ind=document.getElementById('filter-industry').value;
+  var ch=document.getElementById('filter-channel').value;
+  var pr=document.getElementById('filter-priority').value;
+  var ci=document.getElementById('filter-city').value;
+  return records.filter(function(r){
+    if(s&&r.company.toLowerCase().indexOf(s)===-1&&r.position.toLowerCase().indexOf(s)===-1&&(r.note||'').toLowerCase().indexOf(s)===-1)return false;
+    if(st&&r.status!==st)return false;
+    if(ind&&r.industry!==ind)return false;
+    if(ch&&r.channel!==ch)return false;
+    if(pr&&r.priority!==pr)return false;
+    if(ci&&r.city!==ci)return false;
+    return true;
+  });
+}
+
+function applyChartFilter(fn){
+  chartFilter=fn;
+  if(fn){document.getElementById('filter-search').value='';document.getElementById('filter-status').value='';document.getElementById('filter-industry').value='';document.getElementById('filter-channel').value='';document.getElementById('filter-priority').value='';document.getElementById('filter-city').value=''}
+  renderTable();updateChips();
+}
+
+function updateChips(){
+  var el=document.getElementById('active-chips'),chips=[];
+  if(chartFilter)chips.push({label:'图表筛选',clear:function(){chartFilter=null;renderAll()}});
+  el.innerHTML=chips.map(function(c){return'<span class="chip">'+c.label+' <button>&times;</button></span>'}).join('');
+  el.querySelectorAll('.chip button').forEach(function(b,i){b.addEventListener('click',chips[i].clear)});
+}
+
+function stag(s){
+  if(s==='已发Offer')return'tag-good';
+  if(s==='已拒'||s==='被拒')return'tag-bad';
+  if(s==='面试中'||s==='笔试')return'tag-prog';
+  if(s==='待面试')return'tag-wait';
+  return'tag-def';
+}
+function ptag(p){if(p==='高')return'tag-phi';if(p==='低')return'tag-plo';return'tag-pmd'}
+function dlHTML(dl){
+  if(!dl)return'<span style="color:var(--ink-ghost)">-</span>';
+  var now=new Date();now.setHours(0,0,0,0);
+  var d=new Date(dl+'T00:00:00'),diff=Math.ceil((d-now)/86400000);
+  if(diff<0)return'<span class="dl dl-urg">⚠ 过期</span>';
+  if(diff===0)return'<span class="dl dl-urg">⚠ 今天</span>';
+  if(diff<=3)return'<span class="dl dl-soon">⏰ '+diff+'天</span>';
+  return'<span class="dl dl-ok">'+diff+'天</span>';
+}
+
+function renderTable(){
+  var filtered=chartFilter?records.filter(chartFilter):getFiltered();
+  var tbody=document.getElementById('records-tbody');
+  document.getElementById('record-count').textContent='共 '+filtered.length+' 条';
+  document.getElementById('badge-all').textContent=records.length;
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="12"><div class="empty"><div class="empty-ico">🎣</div><p>'+(chartFilter?'图表筛选为空，点 × 清除':'暂无匹配记录')+'</p></div></td></tr>';updateChips();return}
+  tbody.innerHTML=filtered.map(function(r){
+    return'<tr>'+
+      '<td><span class="tag '+ptag(r.priority||'中')+'">'+(r.priority||'中')+'</span></td>'+
+      '<td><strong>'+esc(r.company)+'</strong></td><td>'+esc(r.position)+'</td><td>'+esc(r.city||'-')+'</td>'+
+      '<td>'+esc(r.industry||'-')+'</td><td>'+esc(r.salary||'-')+'</td><td>'+esc(r.channel)+'</td>'+
+      '<td>'+fmtDM(r.date)+'</td><td>'+dlHTML(r.deadline)+'</td>'+
+      '<td><span class="tag '+stag(r.status)+'">'+esc(r.status)+'</span></td>'+
+      '<td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(r.note||'')+'">'+esc(r.note||'-')+'</td>'+
+      '<td style="white-space:nowrap"><button class="btn btn-ghost btn-xs" data-ed="'+r.id+'">✏️</button> <button class="btn btn-danger btn-xs" data-del="'+r.id+'">×</button></td></tr>';
+  }).join('');
+  tbody.querySelectorAll('[data-ed]').forEach(function(b){b.addEventListener('click',function(){editRecord(this.dataset.ed)})});
+  tbody.querySelectorAll('[data-del]').forEach(function(b){b.addEventListener('click',function(){deleteRecord(this.dataset.del)})});
+  updateChips();
+}
+
+function updateSelectFilters(){
+  var cities=[...new Set(records.map(function(r){return r.city}).filter(Boolean))].sort();
+  var industries=[...new Set(records.map(function(r){return r.industry}).filter(Boolean))].sort();
+  var channels=[...new Set(records.map(function(r){return r.channel}).filter(Boolean))].sort();
+  function fillSel(id,list,label){
+    var sel=document.getElementById(id),cur=sel.value;
+    sel.innerHTML='<option value="">'+label+'</option>'+list.map(function(v){return'<option>'+esc(v)+'</option>'}).join('');
+    sel.value=list.indexOf(cur)>=0?cur:'';
+  }
+  fillSel('filter-city',cities,'全部城市');
+  fillSel('filter-industry',industries,'全部行业');
+  fillSel('filter-channel',channels,'全部渠道');
+}
+
+// ═══════════════════════════════════════
+//  DASHBOARD
+// ═══════════════════════════════════════
+function destroyCharts(){Object.values(charts).forEach(function(c){c.destroy()});charts={}}
+function mctx(id){return document.getElementById(id).getContext('2d')}
+
+function updateStats(){
+  var total=records.length;
+  var active=records.filter(function(r){return['已投递','初筛通过','笔试','待面试','面试中'].includes(r.status)}).length;
+  var offer=records.filter(function(r){return r.status==='已发Offer'}).length;
+  var rate=total>0?Math.round(records.filter(function(r){return['待面试','面试中','已发Offer'].includes(r.status)}).length/total*100):0;
+  var cities=new Set(records.map(function(r){return r.city}).filter(Boolean)).size;
+  var now=new Date();now.setHours(0,0,0,0);
+  var urg=records.filter(function(r){if(!r.deadline)return false;var d=new Date(r.deadline+'T00:00:00');var df=Math.ceil((d-now)/86400000);return df>=0&&df<=3}).length;
+  document.getElementById('s-total').textContent=total;document.getElementById('s-active').textContent=active;
+  document.getElementById('s-offer').textContent=offer;document.getElementById('s-rate').textContent='转化率 '+rate+'%';
+  document.getElementById('s-cities').textContent=cities;document.getElementById('s-urgent').textContent=urg;
+}
+
+function renderFunnel(){
+  var stages=['已投递','初筛通过','笔试','待面试','面试中','已发Offer'];
+  var labels=['已投递','初筛通过','笔试','待面试','面试中','Offer'];
+  var data=[],colors=['#c4b7a6','#bfae9e','#b5a9b8','#d8c8a0','#a8b5c8','#a3b5a6'];
+  for(var i=0;i<stages.length;i++)data.push(records.filter(function(r){return stages.indexOf(r.status)>=i}).length);
+  charts.funnel=new Chart(mctx('ch-funnel'),{
+    type:'bar',data:{labels:labels,datasets:[{data:data,backgroundColor:colors,borderRadius:6,borderSkipped:false}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{stepSize:1}}}}
+  });
+}
+
+function renderChannel(){
+  var map={};records.forEach(function(r){map[r.channel]=(map[r.channel]||0)+1});
+  var labels=Object.keys(map),data=Object.values(map);
+  var pal=['#bf9f84','#8fa88e','#ae9eb3','#8197a8','#cbb088','#c9bdb0','#a8b8a0','#c0b0a0','#a0b0c0'];
+  charts.channel=new Chart(mctx('ch-channel'),{
+    type:'doughnut',data:{labels:labels,datasets:[{data:data,backgroundColor:pal.slice(0,labels.length),borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true}}},
+      onClick:function(e,els){if(els.length){var label=labels[els[0].index];applyChartFilter(function(r){return r.channel===label});switchTab('records')}}}
+  });
+}
+
+function renderTimeline(){
+  var map={};records.forEach(function(r){var d=new Date(r.date+'T00:00:00'),day=d.getDay();var mon=new Date(d);mon.setDate(d.getDate()-((day+6)%7));var wk=mon.toISOString().slice(0,10);map[wk]=(map[wk]||0)+1});
+  var keys=Object.keys(map).sort();
+  if(!keys.length){var now=new Date();now.setDate(now.getDate()-((now.getDay()+6)%7));keys=[now.toISOString().slice(0,10)];map[keys[0]]=0}
+  charts.timeline=new Chart(mctx('ch-timeline'),{
+    type:'line',data:{labels:keys.map(function(k){return k.slice(5)}),datasets:[{data:keys.map(function(k){return map[k]}),borderColor:'#bf9f84',backgroundColor:'rgba(191,159,132,0.10)',fill:true,tension:.35,pointBackgroundColor:'#bf9f84',pointRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}
+  });
+}
+
+function renderCity(){
+  var map={};records.forEach(function(r){map[r.city||'未知']=(map[r.city||'未知']||0)+1});
+  var labels=Object.keys(map),data=Object.values(map);
+  var pal=['#bf9f84','#8fa88e','#ae9eb3','#8197a8','#cbb088','#c9bdb0','#a8b8a0','#c0b0a0','#a0b0c0','#b0c0b0'];
+  charts.city=new Chart(mctx('ch-city'),{
+    type:'pie',data:{labels:labels,datasets:[{data:data,backgroundColor:pal.slice(0,labels.length),borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{padding:10,usePointStyle:true,font:{size:10}}}},
+      onClick:function(e,els){if(els.length){var label=labels[els[0].index];applyChartFilter(function(r){return(r.city||'未知')===label});switchTab('records')}}}
+  });
+}
+
+function renderIndustry(){
+  var map={};records.forEach(function(r){map[r.industry||'未知']=(map[r.industry||'未知']||0)+1});
+  var labels=Object.keys(map),data=Object.values(map);
+  var pal=['#bf9f84','#8fa88e','#ae9eb3','#8197a8','#cbb088','#c9bdb0','#a8b8a0','#c0b0a0','#a0b0c0','#b0c0b0','#c4a48b','#9aad95','#b5a0a8','#8ea0b0','#d0b898','#c8c0b4','#a4b4a0','#c4ac90'];
+  charts.industry=new Chart(mctx('ch-industry'),{
+    type:'doughnut',data:{labels:labels,datasets:[{data:data,backgroundColor:pal.slice(0,labels.length),borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{padding:10,usePointStyle:true,font:{size:10}}}},
+      onClick:function(e,els){if(els.length){var label=labels[els[0].index];applyChartFilter(function(r){return(r.industry||'未知')===label});switchTab('records')}}}
+  });
+}
+
+function renderPriority(){
+  var order=['高','中','低'],colors=['#be9898','#cbb088','#8fa88e'];
+  var data=order.map(function(p){return records.filter(function(r){return(r.priority||'中')===p}).length});
+  charts.priority=new Chart(mctx('ch-priority'),{
+    type:'doughnut',data:{labels:['🔥 高优先','⭐ 中优先','💤 低优先'],datasets:[{data:data,backgroundColor:colors,borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true}}}}
+  });
+}
+
+function renderStatus(){
+  var order=['已投递','初筛通过','笔试','待面试','面试中','已发Offer','已拒','被拒'];
+  var colors=['#c4b7a6','#a8b5c8','#b5a9b8','#d8c8a0','#cbb088','#a3b5a6','#d4c5b9','#c4a3a3'];
+  var data=order.map(function(s){return records.filter(function(r){return r.status===s}).length});
+  charts.status=new Chart(mctx('ch-status'),{
+    type:'polarArea',data:{labels:order,datasets:[{data:data,backgroundColor:colors,borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{padding:8,usePointStyle:true,font:{size:9}}}}}
+  });
+}
+
+function renderConvert(){
+  var map={};records.forEach(function(r){if(!map[r.channel])map[r.channel]={t:0,i:0};map[r.channel].t++;if(r.status==='面试中'||r.status==='已发Offer')map[r.channel].i++});
+  var labels=Object.keys(map);
+  charts.convert=new Chart(mctx('ch-convert'),{
+    type:'bar',data:{labels:labels,datasets:[{label:'投递',data:labels.map(function(k){return map[k].t}),backgroundColor:'#c4b7a6',borderRadius:6},{label:'面试',data:labels.map(function(k){return map[k].i}),backgroundColor:'#8fa88e',borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{usePointStyle:true}}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}
+  });
+}
+
+function renderSalary(){
+  var ranges={'0-3k':0,'3-6k':0,'6-8k':0,'8-10k':0,'10-15k':0,'15k+':0,'未知':0};
+  records.forEach(function(r){
+    var s=r.salary;if(!s){ranges['未知']++;return}
+    var ns=s.match(/[\d.]+/g);if(!ns||ns.length<2){ranges['未知']++;return}
+    var lo=Math.min(+ns[0],+ns[1]),hi=Math.max(+ns[0],+ns[1]),avg=(lo+hi)/2;
+    if(avg<3)ranges['0-3k']++;else if(avg<6)ranges['3-6k']++;else if(avg<8)ranges['6-8k']++;else if(avg<10)ranges['8-10k']++;else if(avg<15)ranges['10-15k']++;else ranges['15k+']++;
+  });
+  var labels=Object.keys(ranges),data=Object.values(ranges);
+  charts.salary=new Chart(mctx('ch-salary'),{
+    type:'bar',data:{labels:labels,datasets:[{data:data,backgroundColor:['#d4c5b9','#c4b7a6','#b5a9b8','#a8b5c8','#8fa88e','#bf9f84','#e0d8d0'],borderRadius:8}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}
+  });
+}
+
+function renderCoSummary(){
+  var map={};records.forEach(function(r){if(!map[r.company])map[r.company]={t:0,i:0,o:0,q:0,b:0,h:0};map[r.company].t++;if(r.status==='待面试'||r.status==='面试中'||r.status==='笔试')map[r.company].i++;if(r.status==='已发Offer')map[r.company].o++;if(r.status==='已拒')map[r.company].q++;if(r.status==='被拒')map[r.company].b++;if(r.priority==='高')map[r.company].h++});
+  var sorted=Object.entries(map).sort(function(a,b){return b[1].t-a[1].t});
+  var tbody=document.getElementById('co-summary');
+  if(!sorted.length){tbody.innerHTML='<tr><td colspan="7"><div class="empty"><p>暂无数据</p></div></td></tr>';return}
+  tbody.innerHTML=sorted.map(function(e){var c=e[1];return'<tr><td><strong>'+esc(e[0])+'</strong></td><td>'+c.t+'</td><td>'+c.i+'</td><td>'+c.o+'</td><td>'+c.q+'</td><td>'+c.b+'</td><td>'+c.h+'</td></tr>'}).join('');
+}
+
+function renderDashboard(){
+  destroyCharts();updateStats();
+  renderFunnel();renderChannel();renderTimeline();renderCity();renderIndustry();
+  renderPriority();renderStatus();renderConvert();renderSalary();renderCoSummary();
+}
+
+// ═══════════════════════════════════════
+//  CSV EXPORT
+// ═══════════════════════════════════════
+function exportCSV(){
+  var filtered=chartFilter?records.filter(chartFilter):getFiltered();
+  if(!filtered.length){T('无数据');return}
+  var csv='\uFEFF公司,岗位,城市,行业,薪资(k),渠道,投递日期,提醒日期,状态,优先级,备注\n';
+  csv+=filtered.map(function(r){return[r.company,r.position,r.city||'',r.industry||'',r.salary||'',r.channel,r.date,r.deadline||'',r.status,r.priority||'中',r.note||''].map(function(c){return'"'+(c||'').replace(/"/g,'""')+'"'}).join(',')}).join('\n');
+  var b=new Blob([csv],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(b);
+  var a=document.createElement('a');a.href=u;a.download='JobFish_'+todayStr()+'.csv';a.click();URL.revokeObjectURL(u);T('CSV 已导出');
+}
+
+// ═══════════════════════════════════════
+//  EXCEL IMPORT
+// ═══════════════════════════════════════
+var FIELD_MAP={
+  company:['公司名称','公司','企业','company','单位','用人单位'],
+  position:['岗位名称','岗位','职位','position','应聘岗位','招聘岗位','职务'],
+  city:['城市','工作城市','地点','工作地点','city','地区','工作地','base','Base'],
+  industry:['行业','公司行业','industry','所属行业'],
+  salary:['薪资','薪资范围','工资','salary','薪酬','待遇','薪资(k)','薪资（k）','薪资k'],
+  channel:['渠道','投递渠道','来源','channel','招聘渠道','投递来源'],
+  date:['投递日期','日期','投递时间','date','申请日期','投递日'],
+  deadline:['提醒日期','截止日期','deadline','跟进日期','提醒日','截止日'],
+  status:['状态','当前状态','进度','status','投递状态','招聘状态'],
+  priority:['优先级','重要程度','priority','优先'],
+  note:['备注','说明','补充','note','记录','其他','备注说明']
+};
+
+function matchField(header){
+  var h=header.replace(/\s+/g,'').toLowerCase();
+  for(var key in FIELD_MAP){for(var i=0;i<FIELD_MAP[key].length;i++){if(h===FIELD_MAP[key][i].replace(/\s+/g,'').toLowerCase())return key}}
+  return null;
+}
+
+function parseExcel(file){
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      var sheet=wb.Sheets[wb.SheetNames[0]];
+      var rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
+      if(rows.length<2){T('文件至少需要包含表头和一行数据');return}
+      var headers=rows[0].map(function(h){return String(h).trim()}).filter(function(h){return h});
+      if(headers.length<3){T('未识别到足够的表头列');return}
+      var mapping={};headers.forEach(function(h,i){var f=matchField(h);if(f)mapping[f]=i;else mapping['_col'+i]=i});
+      var parsed=[];
+      for(var r=1;r<rows.length;r++){
+        var row=rows[r];if(!row||!row.some(function(c){return String(c).trim()}))continue;
+        var rec={
+          company:String(row[mapping.company]||'').trim(),
+          position:String(row[mapping.position]||'').trim(),
+          city:String(row[mapping.city]||'').trim(),
+          industry:String(row[mapping.industry]||'').trim(),
+          salary:String(row[mapping.salary]||'').trim(),
+          channel:String(row[mapping.channel]||'').trim(),
+          date:parseDate(String(row[mapping.date]||'')),
+          deadline:parseDate(String(row[mapping.deadline]||'')),
+          status:normalizeStatus(String(row[mapping.status]||'')),
+          priority:normalizePriority(String(row[mapping.priority]||'')),
+          note:String(row[mapping.note]||'').trim()
+        };
+        var extraNotes=[];Object.keys(mapping).forEach(function(k){if(k.startsWith('_col')){var v=String(row[mapping[k]]||'').trim();if(v)extraNotes.push(headers[mapping[k]]+':'+v)}});
+        if(extraNotes.length)rec.note=(rec.note+' | '+extraNotes.join('; ')).replace(/^\s*\|\s*/,'');
+        parsed.push(rec);
+      }
+      if(!parsed.length){T('未解析到有效数据行');return}
+      importData=parsed.map(function(r){r.id=gid();r.createdAt=new Date().toISOString();if(!r.status)r.status='已投递';if(!r.priority)r.priority='中';if(!r.date)r.date=todayStr();return r});
+      showImportPreview();
+    }catch(err){T('文件解析失败：'+err.message)}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseDate(str){str=str.trim();if(!str)return'';var m=str.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');var excelNum=parseFloat(str);if(excelNum>40000&&excelNum<60000){var d=new Date((excelNum-25569)*86400000);return d.toISOString().split('T')[0]}return''}
+function normalizeStatus(s){s=s.trim();var m={已投递:['已投递','投递','已申请','申请','待反馈'],初筛通过:['初筛通过','初筛','简历通过','筛选通过'],笔试:['笔试','测试','测评'],待面试:['待面试','等待面试','约面'],面试中:['面试中','面试','一面','二面','三面','终面','hr面','HR面'],已发Offer:['已发offer','offer','录用','通过','录取'],已拒:['已拒','主动放弃','自己拒绝','拒了','拒绝offer','放弃'],被拒:['被拒','对方拒绝','公司拒绝','未通过','挂掉','挂了','不合适','拒信']};var lo=s.toLowerCase();for(var key in m){for(var i=0;i<m[key].length;i++){if(lo===m[key][i].toLowerCase())return key}}return s||'已投递'}
+function normalizePriority(s){var lo=s.trim().toLowerCase();if(['高','重要','紧急','high','1','a'].indexOf(lo)>=0)return'高';if(['低','不重要','low','3','c'].indexOf(lo)>=0)return'低';return'中'}
+
+function showImportPreview(){
+  var card=document.getElementById('import-preview-card');card.style.display='';
+  document.getElementById('import-row-count').textContent=importData.length;
+  var cols=importData.length?Object.keys(importData[0]).filter(function(k){return k!=='id'&&k!=='createdAt'}):[];
+  if(cols.indexOf('industry')>=0)cols.splice(cols.indexOf('industry'),0,cols.splice(cols.indexOf('channel'),1)[0]);
+  var thead=document.getElementById('import-preview-head');
+  thead.innerHTML='<tr>'+cols.map(function(c){return'<th>'+esc(c)+'</th>'}).join('')+'</tr>';
+  var preview=importData.slice(0,10);
+  document.getElementById('import-preview-body').innerHTML=preview.map(function(r){return'<tr>'+cols.map(function(c){return'<td>'+esc(String(r[c]||'-')).slice(0,30)+'</td>'}).join('')+'</tr>'}).join('');
+  if(importData.length>10)document.getElementById('import-preview-body').innerHTML+='<tr><td colspan="'+cols.length+'" style="text-align:center;color:var(--ink-muted)">... 还有 '+(importData.length-10)+' 条</td></tr>';
+  card.scrollIntoView({behavior:'smooth'});
+}
+
+function doImport(mode){
+  if(!importData)return;
+  if(mode==='replace'){records=importData}else{var existingIds=new Set(records.map(function(r){return r.id}));var newRecs=importData.filter(function(r){return!existingIds.has(r.id)});records=records.concat(newRecs)}
+  save(records);importData=null;document.getElementById('import-preview-card').style.display='none';
+  checkDeadlines();chartFilter=null;renderAll();T(mode==='replace'?'已覆盖导入':'已合并导入');
+}
+
+// ═══════════════════════════════════════
+//  BACKUP
+// ═══════════════════════════════════════
+function exportBackup(){if(!records.length){T('无数据');return}var b=new Blob([JSON.stringify(records,null,2)],{type:'application/json'});var u=URL.createObjectURL(b);var a=document.createElement('a');a.href=u;a.download='JobFish_备份_'+todayStr()+'.json';a.click();URL.revokeObjectURL(u);T('备份已下载')}
+function importBackup(file){var r=new FileReader();r.onload=function(e){try{var d=JSON.parse(e.target.result);if(!Array.isArray(d))throw Error()}catch(err){T('文件格式错误');return}if(confirm('导入 '+d.length+' 条记录。\n\n确定=覆盖，取消=合并')){records=d}else{var ids=new Set(records.map(function(x){return x.id}));records=records.concat(d.filter(function(x){return!ids.has(x.id)}))}save(records);checkDeadlines();chartFilter=null;renderAll();T('已导入')};r.readAsText(file)}
+function clearAll(){if(!confirm('⚠️ 确定清除全部数据？不可恢复！建议先导出备份。'))return;if(prompt('输入"确认删除"：')!=='确认删除'){T('已取消');return}records=[];save(records);resetForm();chartFilter=null;renderAll();T('已清除')}
+function updateBackupStats(){
+  document.getElementById('bk-count').textContent=records.length;
+  var json=JSON.stringify(records),kb=(new Blob([json]).size/1024).toFixed(1);document.getElementById('bk-size').textContent=kb+' KB';
+  if(records.length){var s=records.slice().sort(function(a,b){return a.date.localeCompare(b.date)});document.getElementById('bk-oldest').textContent=s[0].date;document.getElementById('bk-newest').textContent=s[s.length-1].date}
+  else{document.getElementById('bk-oldest').textContent='-';document.getElementById('bk-newest').textContent='-'}
+}
+
+// ═══════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════
+function switchTab(tab){currentTab=tab;document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.toggle('active',b.dataset.tab===tab)});document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.toggle('active',p.id==='panel-'+tab)});if(tab==='dashboard')renderDashboard();if(tab==='backup')updateBackupStats()}
+function renderAll(){updateSelectFilters();renderTable();if(currentTab==='dashboard')renderDashboard();if(currentTab==='backup')updateBackupStats()}
+
+// ═══════════════════════════════════════
+//  BINDINGS
+// ═══════════════════════════════════════
+document.getElementById('btn-save').addEventListener('click',saveRecord);
+document.getElementById('btn-cancel').addEventListener('click',function(){resetForm();chartFilter=null;renderAll()});
+document.getElementById('btn-export-csv').addEventListener('click',exportCSV);
+document.getElementById('alert-close').addEventListener('click',function(){alertOff=true;document.getElementById('alert-bar').style.display='none'});
+document.querySelectorAll('.tab-btn').forEach(function(b){b.addEventListener('click',function(){switchTab(this.dataset.tab)})});
+['filter-search','filter-status','filter-industry','filter-channel','filter-priority','filter-city'].forEach(function(id){document.getElementById(id).addEventListener(id==='filter-search'?'input':'change',function(){chartFilter=null;renderTable()})});
+
+var importZone=document.getElementById('import-zone');
+document.getElementById('import-select-btn').addEventListener('click',function(){document.getElementById('import-file-input').click()});
+document.getElementById('import-file-input').addEventListener('change',function(){if(this.files[0])parseExcel(this.files[0]);this.value=''});
+importZone.addEventListener('dragover',function(e){e.preventDefault();importZone.classList.add('dragover')});
+importZone.addEventListener('dragleave',function(){importZone.classList.remove('dragover')});
+importZone.addEventListener('drop',function(e){e.preventDefault();importZone.classList.remove('dragover');if(e.dataTransfer.files[0])parseExcel(e.dataTransfer.files[0])});
+document.getElementById('import-merge-btn').addEventListener('click',function(){doImport('merge')});
+document.getElementById('import-replace-btn').addEventListener('click',function(){doImport('replace')});
+document.getElementById('import-cancel-btn').addEventListener('click',function(){importData=null;document.getElementById('import-preview-card').style.display='none'});
+
+document.getElementById('bk-export').querySelector('button').addEventListener('click',exportBackup);
+document.getElementById('bk-import-btn').addEventListener('click',function(){document.getElementById('bk-file-input').click()});
+document.getElementById('bk-file-input').addEventListener('change',function(){if(this.files[0])importBackup(this.files[0]);this.value=''});
+document.getElementById('btn-clear').addEventListener('click',clearAll);
+
+document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key==='s'&&currentTab==='records'){e.preventDefault();saveRecord()}});
+setInterval(function(){alertOff=false;checkDeadlines()},30*60*1000);
+
+document.getElementById('f-date').value=todayStr();
+checkDeadlines();renderAll();
+</script>
+</body>
+</html>
