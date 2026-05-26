@@ -1,4 +1,4 @@
-# Yuwannn.github.io
+# Yuwannn.github.JobFish
 # 🐟 JobFish — 你的求职数据指挥舱
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
